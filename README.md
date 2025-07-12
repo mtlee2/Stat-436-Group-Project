@@ -11,3 +11,6 @@ Although, I will say that I had initally thought that it would be nice to have d
 The other datasets I found require a lot of data cleaning, which may be time consuming to reference the data source code book and identify each individual variable. 
 
 **For now just add other dataset files you found and run them in the Exploratory Data rmd file that I've created, or create your own.**
+
+
+The CDC website does offer a lot of datasets as well, although many of them are in txt file format. So I opted for the fastest quick access datasets in csv files. 
