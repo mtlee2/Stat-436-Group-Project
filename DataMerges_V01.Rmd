@@ -1,0 +1,156 @@
+---
+title: "Data Merges"
+author: "Mai Tah Lee"
+date: "2025-07-12"
+output: rmdformats::robobook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, message = FALSE)
+
+library(tidyverse)
+```
+
+
+# Update Dataframes to be merged
+```{r}
+info <- function(df) {
+  cat(sep = "", "Year Range: ", sort(df$Year)[1], "-",   sort(df$Year)[length(df$Year)])
+  cat(sep = "", "\nTotal Observations: ", nrow(df))
+}
+```
+
+
+```{r}
+df01 <- read.csv("data/World Data/children-born-per-woman.csv") %>% 
+  filter(Entity == "United States") %>%
+  rename(avgBirthWomen = Fertility.rate..period...historical)
+
+info(df01)
+```
+
+```{r}
+df02 <- read.csv("data/World Data/child-mortality-vs-electoral-democracy.csv") %>%
+  filter(Entity == "United States") %>%
+  rename(
+    childDeath100LiveBirths = Child.mortality.rate.of.children.aged.under.five.years..per.100.live.births,
+    democracyIndex = Electoral.democracy.index..central.estimate.
+    ) %>%
+  select(-World.regions.according.to.OWID) 
+
+info(df02)
+cat("\n\nchildDeath100LiveBirths obs:", length(na.omit(df02$childDeath100LiveBirths)))
+cat("\ndemocracyIndex obs:", length(na.omit(df02$democracyIndex)))
+
+
+```
+
+```{r}
+df03 <- read.csv("data/World Data/share-of-the-world-population-with-at-least-basic-education.csv") %>%
+  filter(Entity == "United States", Year >= 1950 & Year <= 2025) %>%
+  rename(
+    popNoEduc = Share.of.population.with.no.education,
+    popBasicEduc = Share.of.population.with.at.least.some.basic.education
+  ) 
+
+info(df03)
+
+cat("\n\npopNoEduc obs: ", length(na.omit(df03$popNoEduc)))
+cat("\npopBasicEduc obs: ", length(na.omit(df03$popBasicEduc)))
+```
+
+```{r}
+df04 <- read.csv("data/World Data/period-average-age-of-mothers.csv") %>%
+  filter(Entity == "United States") %>%
+  rename(avgChildbearingAge = Mean.age.at.childbearing..historical)
+
+info(na.omit(df04))
+```
+
+```{r}
+df05 <- read.csv("data/World Data/children-per-woman-fertility-rate-vs-level-of-prosperity.csv") %>%
+  filter(Entity == "United States", Year > 1770) %>%
+  select(
+    -Fertility.rate...Sex..all...Age..all...Variant..estimates,
+    -World.regions.according.to.OWID
+    ) %>%
+  arrange(Year) %>%
+  rename(
+    gpdCapita = GDP.per.capita..output..multiple.price.benchmarks.,
+    population = Population..historical.
+    )
+
+info(df05)
+cat("\n\ngpdCapita obs: ", length(na.omit(df05$gpdCapita)))
+cat("\npopulation obs: ", length(na.omit(df05$population)))
+```
+
+```{r}
+df06 <- read.csv("data/World Data/share-of-married-women-ages-15-49-years-whose-need-for-family-planning-is-satisfied.csv") %>%
+  filter(Entity == "United States") %>%
+  rename(
+    familyPlanSatisfied = X3.7.1...Proportion.of.women.of.reproductive.age..aged.15.49.years..who.have.their.need.for.family.planning.satisfied.with.modern.methods....of.women.aged.15.49.years....SH_FPL_MTMM
+  )
+
+info(df06)
+df06
+```
+
+```{r}
+df07 <- read.csv("data/World Data/unmet-need-for-contraception-share-of-married-women-of-reproductive-age.csv") %>%
+  filter(Entity == "United States") %>%
+  rename(notPregNoContraception = Unmet.need.for.contraception....of.married.women.ages.15.49.)
+
+info(df07)
+
+```
+
+```{r}
+df08 <- read.csv("data/World Data/cross-country-literacy-rates.csv") %>% 
+  filter(Entity == "United States") %>%
+  rename(litRate = Literacy.rate)
+
+info(df08)
+```
+
+```{r}
+df09 <- read.csv("data/World Data/share-of-education-in-government-expenditure.csv") %>%
+  filter(Entity == "United States") %>%
+  rename(govnSpendEduc = Government.expenditure.on.education..total....of.government.expenditure.)
+
+info(df09)
+```
+
+```{r}
+df10 <- read.csv("data/World Data/women-political-empowerment-index.csv") %>% 
+  filter(Entity == "United States") %>%
+  rename(womenEmpowermentIndex = Women.s.political.empowerment.index..central.estimate.) 
+
+info(df10)
+```
+
+
+```{r}
+df11 <- read.csv("data/World Data/marriage-rate-per-1000-inhabitants.csv") %>%
+  filter(Entity == "United States") %>%
+  rename(marriageRate = Crude.marriage.rate..marriages.per.1.000.people.)
+
+info(df11)
+```
+
+# Merge Data Frames
+```{r}
+dfs <- list(df01, df02, df03, df04, df05, df06, df07, df08, df09, df10, df11)
+
+merged_df <- reduce(dfs, full_join, by = c("Entity", "Code", "Year"))
+
+merged_df
+```
+
+```{r}
+write.csv(merged_df, "data/mergedWorldDataset.csv", row.names = FALSE)
+```
+
+
+
+

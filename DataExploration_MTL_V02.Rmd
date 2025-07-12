@@ -1,0 +1,104 @@
+---
+title: "Data Exploration"
+author: "Mai Tah Lee"
+date: "2025-07-12"
+output: rmdformats::robobook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, message = FALSE)
+
+library(tidyverse)
+theme_set(theme_bw())
+```
+
+# Data
+```{r}
+usData <- read.csv("data/mergedWorldDataset.csv")
+usData %>% head(5)
+```
+
+
+# Some Comparisons
+* Average Birth per women by marriage rate
+```{r}
+plt1 <- usData %>% 
+  select(Year, avgBirthWomen) %>%
+  drop_na() %>%
+  
+  ggplot(aes(Year, avgBirthWomen)) + 
+  geom_smooth(se = FALSE) + 
+  scale_x_continuous(breaks = seq(1930, 2025, 10), limits = c(1930, 2025)) + 
+  labs(
+    title = "U.S. Average Number of Live Births Per Women",
+    y = "Number of Live Births"
+  )
+plt1
+```
+
+```{r}
+plt2 <- usData %>% 
+  select(Year, marriageRate) %>%
+  drop_na() %>% 
+  arrange(desc(Year)) %>%
+
+  ggplot(aes(Year, marriageRate)) +
+  geom_smooth(se = FALSE) +
+  scale_x_continuous(breaks = seq(1880, 2020, 10), limits = c(1880, 2020)) +
+  labs(
+    title = "U.S. Marriage Rate",
+    y = "Number of Marriages per 1,000 People"
+  )
+plt2
+```
+
+```{r warning = FALSE}
+usData %>% 
+  select(Year, avgBirthWomen, democracyIndex) %>%
+  drop_na() %>%
+  
+  ggplot(aes(avgBirthWomen, democracyIndex)) + 
+  geom_smooth(se = FALSE) 
+```
+```{r warning = FALSE}
+ggplot(usData, aes(x = Year)) +
+  geom_line(aes(y = avgBirthWomen, color = "Fertility Rate")) +
+  geom_line(aes(y = democracyIndex, color = "Democracy Index")) +
+  labs(y = "", color = "") +
+  theme_minimal()
+```
+
+```{r}
+plt4 <- usData %>%
+  select(Year, avgBirthWomen, gpdCapita) %>%
+  drop_na() %>%
+  
+  ggplot(aes(gpdCapita, avgBirthWomen)) + 
+  geom_smooth(se = FALSE)
+
+plt4
+
+```
+
+```{r warning=FALSE}
+
+long_df = usData %>%
+  select(-Entity, -Code) %>%
+  pivot_longer(
+    cols = -c(Year, avgBirthWomen),
+    names_to = "variable",
+    values_to = "value"
+  ) %>% 
+  drop_na()
+
+ggplot(long_df, aes(x = avgBirthWomen, y = value)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(se = FALSE, color = "blue") +
+  facet_wrap(~ variable, scales = "free_y") +
+  labs(x = "Avg Births per Woman", y = "Value", title = "Correlation with Avg Births per Woman") +
+  theme_minimal()
+```
+
+
+
+
