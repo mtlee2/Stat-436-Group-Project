@@ -1,0 +1,47 @@
+---
+title: "Data Exploration"
+author: "Mai Tah Lee"
+date: "2025-07-12"
+output: rmdformats::robobook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, message = FALSE)
+
+library(tidyverse)
+```
+
+* 20250711-MTL: For now the other datasets may require a lot of data cleaning, this one below is relatively clean. 
+
+  * Other datasets in the other folder such as the National Survey of Family growth may be interesting as it holds information on respondents in the United States, as well as their thoughts on having children, giving birth, etc. 
+
+
+* This data set here may be a nice quick report on how the world is doing so far. From there we can further investigate what may possible be leading to decline, not causal, but considerations. 
+```{r}
+childrenPerWomen <- read.csv("data/children born per women/children-born-per-woman.csv")
+
+childrenPerWomen %>% arrange(desc(Year))
+```
+
+```{r}
+#unique(childrenPerWomen$Entity)
+
+cat("total countries in dataset=", length(unique(childrenPerWomen$Entity)))
+cat("\nyears accounted for=", sort(unique(childrenPerWomen$Year)))
+```
+
+
+```{r}
+childrenPerWomen %>% 
+  group_by(Year, Entity) %>%
+  summarize(fertilityRate = mean(Fertility.rate..period...historical)) %>%
+  
+  
+  # for now I'm not going apply col = Entity b/c it may become to cluttered. So we may have to expand possible visualizations. 
+  ggplot(aes(Year, fertilityRate)) + 
+  geom_smooth(se = FALSE) +
+  scale_x_continuous(breaks = seq(1890, 2025, 10), limits = c(1890, 2025)) + 
+  theme_minimal()
+```
+
+
