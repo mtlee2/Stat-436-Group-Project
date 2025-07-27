@@ -1,0 +1,77 @@
+---
+title: "Group Milestone 2"
+output: html_notebook
+runtime: shiny
+resource_files:
+- Downloads/Stat436/mergedWorldDataset.csv
+---
+
+
+```{r, eval=TRUE}
+# imports
+library(shiny)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(plotly)
+library(tidyverse)
+
+
+# read and clean data
+data = read_csv("mergedWorldDataset.csv", show_col_types = FALSE)
+data = data |>
+  filter(!is.na(avgChildbearingAge), !is.na(womenEmpowermentIndex), !is.na(marriageRate))|>
+  select(Year, avgChildbearingAge, womenEmpowermentIndex, marriageRate)
+
+
+# create layout with slider for year, and choices for y-axis metrics
+ui = fluidPage(
+  titlePanel("Women's Empowerment Data Over Time (U.S)"),
+  sidebarLayout(
+    sidebarPanel(
+      sliderInput("yearRange", "Select Year Range", min(data$Year), max(data$Year), 
+                  value = c(min(data$Year), max(data$Year)),step = 1, sep = ""),
+      selectInput("yMetric", "Select Y-Axis Metric: ", 
+                  choices = c("Average Childbearing Age" = "avgChildbearingAge","Marriage Rate" = "marriageRate"),
+                  selected = "avgChildbearingAge")),
+    mainPanel(plotlyOutput("barLinePlot"))
+    
+  )
+)
+
+
+# server that displays graph
+server = function(input, output) {
+  
+  output$barLinePlot = renderPlotly({
+    filtered_data = data |>
+      filter(Year >=input$yearRange[1], Year <= input$yearRange[2]) |>
+      mutate(
+        selectedMetric = .data[[input$yMetric]], 
+        emp = womenEmpowermentIndex
+        )
+    
+    
+    plot = ggplot(filtered_data, aes(x = Year)) +
+      geom_col(aes(y = selectedMetric, fill = emp), width = 0.5) +
+      scale_fill_gradient(low = "lightblue", high = "navy")+
+      scale_x_continuous(breaks = seq(min(filtered_data$Year), max(filtered_data$Year), 5)) +
+      labs(
+        x = "Year",
+        y = ifelse(input$yMetric == "avgChildbearingAge", "Average Childbearing Age", "Marriage Rate"),
+        fill = "Empowerment Index",
+        title = "Selected Metric vs. Women's Empowerment Over Time"
+        ) +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    ggplotly(plot)
+  })
+}
+
+
+# run shiny app
+shinyApp(ui = ui, server = server)
+
+```
+
