@@ -1,0 +1,81 @@
+---
+title: "Milestone2"
+author: "Team 4"
+date: "2025-07-24"
+output: html_document
+---
+
+## R Markdown
+
+For each of your (at least four) visualizations:
+
+1) Display the visualization directly in your write-up if it is a static visualization, or include evidence of functionality as described in "How to Submit a Shiny App" in previous individual homework assignments. 
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidygraph)
+library(tidyverse)
+library(ggraph)
+library(shiny)
+library(patchwork)
+library(tidyverse)
+data = read_csv("mergedWorldDataset.csv")
+mergedWorld = data[18:87,] 
+#keeps all columns but only keeps rows with GDP value
+
+
+library(shiny)
+library(tidyverse)
+
+ui <- fluidPage(
+  titlePanel("GDP vs Birthrates Comparison"),
+  
+  fluidRow(
+    column(6, plotOutput("plot1", brush = brushOpts(id = "sharedBrush", resetOnNew = FALSE))),
+    column(6, plotOutput("plot2", brush = brushOpts(id = "sharedBrush", resetOnNew = FALSE)))
+  )
+)
+
+server <- function(input, output, session) {
+  selectedYears <- reactiveVal(numeric(0))
+
+  observeEvent(input$sharedBrush, {
+    brushed <- brushedPoints(mergedWorld, input$sharedBrush, xvar = "Year", yvar = NULL)
+    selectedYears(brushed$Year)
+  })
+
+  output$plot1 <- renderPlot({
+    highlightYears <- selectedYears()
+    mergedWorld %>%
+      mutate(highlight = Year %in% highlightYears) %>%
+      ggplot(aes(x = Year, y = avgBirthWomen)) +
+      geom_point(aes(alpha = highlight, size = highlight)) +
+      scale_alpha_manual(values = c("TRUE" = 1, "FALSE" = 0.5), guide = "none") +
+      scale_size_manual(values = c("TRUE" = 3, "FALSE" = 1), guide = "none") +
+      labs(title = "Birth Rates Over Time", y = "Average birth rate per woman")
+  })
+
+  output$plot2 <- renderPlot({
+    highlightYears <- selectedYears()
+    mergedWorld %>%
+      mutate(highlight = Year %in% highlightYears) %>%
+      ggplot(aes(x = Year, y = gpdCapita)) +
+      geom_point(aes(alpha = highlight, size = highlight)) +
+      scale_alpha_manual(values = c("TRUE" = 1, "FALSE" = 0.3), guide = "none") +
+      scale_size_manual(values = c("TRUE" = 3, "FALSE" = 1), guide = "none") +
+      labs(title = "GDP Per Capita Over Time", y = "GDP per Capita")
+  })
+}
+
+shinyApp(ui, server)
+
+```
+
+2) Explain how to interpret the visualization and how it is relevant to the main questions/purpose of your project. Include at least one specific example of a takeaway a viewer can make from the graph. Please clearly relate your choices to the high-level goals and questions you explained in Milestone 1. If a design choice was inspired by your literature review, be sure to reference the specific existing visualization.
+
+This visualization aims to effectively compare the change of birthrate per year to the change in GDP per capita per year. It aims to explore one of the factors that may contribute to declining fertility levels in the United States. This is done so by keeping the factor of year consistent, and allowing the user to brush over points in each graph to more easily identify which points are connected to one another. With this graph, there are some interesting similarities between these trends that can be observed. For example, if the user brushes the points from 2000 to 2010 for either graph, they can observe that there is a very similar pattern of increase and decrease for both graphs, both of them reaching a local maximum at the same value. This visualization also aims to include more relevant interactivity, which was not present in some of the visualizations found in the literature review. The goal of constructing this prototype is to examine different factors and its relation to birthrate by making the interactivity portion illustrate these similarities and differences effectively.
+
+3) Finally, now that you see the design on your real data, please evaluate at least one strength and one weakness of each design, especially emphasizing cases where one design addresses a problem present in another. For example, there may be trade-offs in how densely packed the marks on a visualization are, how many different variables can be encoded, how intuitive a visualization is to understand, or how a visualization enables or hinders answering certain sub-questions of interest.
+
+One strength of this visualization is it does a great job at isolating different parts of the graph to observe different trends. This works effectively when comparing one or two factors. This visualization may not be as effective when introducing other faceted graphs on top of a limited number of factors. This would take a lot of mental work from the user to analyze. It might also be difficult for the user to interpret the values for each graph individually, as there are not many x and y ticks. This would be improved upon for Milestone 3 when better styling is applied to the graphs. Overall, this visualization does a good job at allowing users to compare factors to each other, but may not be the best if the user only aims to look at each graph on its own or if they want to look at 10 different factors at once.
+
