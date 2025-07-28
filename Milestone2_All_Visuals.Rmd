@@ -1,0 +1,351 @@
+---
+title: "Milestone 2 Final"
+author: "Mai Tah Lee"
+date: "2025-07-28"
+output: rmdformats::robobook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, message = FALSE) 
+
+library(tidyverse)
+library(shiny)
+library(plotly)
+library(tidygraph)
+library(ggraph)
+library(patchwork)
+
+```
+
+```{r}
+df <- read.csv("data/mergedWorldDataset.csv"); df %>% head(5)
+```
+
+# Visualization 1
+
+```{r warning = FALSE}
+
+df_education_rates <- df %>%
+  filter(!is.na(avgBirthWomen), !is.na(popNoEduc), !is.na(popBasicEduc)) %>%
+  mutate(totalEduPop = popNoEduc + popBasicEduc) %>%
+  mutate(
+    noEduRate = avgBirthWomen * (popNoEduc / totalEduPop),
+    basicEduRate = avgBirthWomen * (popBasicEduc / totalEduPop)
+  ) %>%
+  select(Year, noEduRate, basicEduRate) %>%
+  pivot_longer(
+    cols = c(noEduRate, basicEduRate),
+    names_to = "EducationLevel",
+    values_to = "ApproxBirthRate"
+  )
+
+ui <- fluidPage(
+  titlePanel("Birth Rates by Education Level Over Time (U.S.)"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      sliderInput("yearRange", 
+                  "Select Year Range:", 
+                  min = min(df_education_rates$Year), 
+                  max = max(df_education_rates$Year),
+                  value = c(min(df_education_rates$Year), max(df_education_rates$Year)),
+                  step = 1,
+                  sep = ""),
+      
+      checkboxGroupInput("eduLevels", 
+                         "Select Education Level(s):",
+                         choices = list("No Education" = "noEduRate", "Basic Education" = "basicEduRate"),
+                         selected = c("noEduRate", "basicEduRate"))
+    ),
+    
+    mainPanel(
+      plotlyOutput("birthRatePlot")
+    )
+  )
+)
+
+server <- function(input, output) {
+  filteredData <- reactive({
+    df_education_rates %>%
+      filter(Year >= input$yearRange[1], Year <= input$yearRange[2]) %>%
+      filter(EducationLevel %in% input$eduLevels)
+  })
+  
+  output$birthRatePlot <- renderPlotly({
+    p <- ggplot(filteredData(), aes(x = Year, y = ApproxBirthRate, color = EducationLevel)) +
+      geom_line(size = 1.2) +
+      geom_point(size = 2) +
+      scale_color_manual(
+        values = c(
+          "noEduRate" = "#3498db",  # Blue
+          "basicEduRate" = "#e74c3c"  # Red
+        ),
+        labels = c(
+          "noEduRate" = "No Education",
+          "basicEduRate" = "Basic Education"
+        )
+      ) +
+      labs(
+        x = "Year",
+        y = "Estimated Births per Woman",
+        color = "Education Level"
+      ) +
+      theme_minimal()
+    
+    ggplotly(p)
+  })
+}
+
+#shinyApp(ui, server)
+```
+
+<video width="640" height="360" controls>
+  <source src="images/vis_1.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
+
+# Visualization 2
+
+```{r}
+mergedWorld = df[18:87,] 
+#keeps all columns but only keeps rows with GDP value
+
+ui <- fluidPage(
+  titlePanel("GDP vs Birthrates Comparison"),
+  
+  fluidRow(
+    column(6, plotOutput("plot1", brush = brushOpts(id = "sharedBrush", resetOnNew = FALSE))),
+    column(6, plotOutput("plot2", brush = brushOpts(id = "sharedBrush", resetOnNew = FALSE)))
+  )
+)
+
+server <- function(input, output, session) {
+  selectedYears <- reactiveVal(numeric(0))
+
+  observeEvent(input$sharedBrush, {
+    brushed <- brushedPoints(mergedWorld, input$sharedBrush, xvar = "Year", yvar = NULL)
+    selectedYears(brushed$Year)
+  })
+
+  output$plot1 <- renderPlot({
+    highlightYears <- selectedYears()
+    mergedWorld %>%
+      mutate(highlight = Year %in% highlightYears) %>%
+      ggplot(aes(x = Year, y = avgBirthWomen)) +
+      geom_point(aes(alpha = highlight, size = highlight)) +
+      scale_alpha_manual(values = c("TRUE" = 1, "FALSE" = 0.5), guide = "none") +
+      scale_size_manual(values = c("TRUE" = 3, "FALSE" = 1), guide = "none") +
+      labs(title = "Birth Rates Over Time", y = "Average birth rate per woman")
+  })
+
+  output$plot2 <- renderPlot({
+    highlightYears <- selectedYears()
+    mergedWorld %>%
+      mutate(highlight = Year %in% highlightYears) %>%
+      ggplot(aes(x = Year, y = gpdCapita)) +
+      geom_point(aes(alpha = highlight, size = highlight)) +
+      scale_alpha_manual(values = c("TRUE" = 1, "FALSE" = 0.3), guide = "none") +
+      scale_size_manual(values = c("TRUE" = 3, "FALSE" = 1), guide = "none") +
+      labs(title = "GDP Per Capita Over Time", y = "GDP per Capita")
+  })
+}
+
+#shinyApp(ui, server)
+
+```
+
+<video width="640" height="360" controls>
+  <source src="images/vis_2.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
+
+
+# Visualization 3 
+
+```{r}
+# read and clean data
+# data = read_csv("data/mergedWorldDataset.csv", show_col_types = FALSE)
+data = df |>
+  filter(!is.na(avgChildbearingAge), !is.na(womenEmpowermentIndex), !is.na(marriageRate))|>
+  select(Year, avgChildbearingAge, womenEmpowermentIndex, marriageRate)
+
+
+# create layout with slider for year, and choices for y-axis metrics
+ui = fluidPage(
+  titlePanel("Women's Empowerment Data Over Time (U.S)"),
+  sidebarLayout(
+    sidebarPanel(
+      sliderInput("yearRange", "Select Year Range", min(data$Year), max(data$Year), 
+                  value = c(min(data$Year), max(data$Year)),step = 1, sep = ""),
+      selectInput("yMetric", "Select Y-Axis Metric: ", 
+                  choices = c("Average Childbearing Age" = "avgChildbearingAge","Marriage Rate" = "marriageRate"),
+                  selected = "avgChildbearingAge")),
+    mainPanel(plotlyOutput("barLinePlot"))
+    
+  )
+)
+
+
+# server that displays graph
+server = function(input, output) {
+  
+  output$barLinePlot = renderPlotly({
+    filtered_data = data |>
+      filter(Year >=input$yearRange[1], Year <= input$yearRange[2]) |>
+      mutate(
+        selectedMetric = .data[[input$yMetric]], 
+        emp = womenEmpowermentIndex
+        )
+    
+    
+    plot = ggplot(filtered_data, aes(x = Year)) +
+      geom_col(aes(y = selectedMetric, fill = emp), width = 0.5) +
+      scale_fill_gradient(low = "lightblue", high = "navy")+
+      scale_x_continuous(breaks = seq(min(filtered_data$Year), max(filtered_data$Year), 5)) +
+      labs(
+        x = "Year",
+        y = ifelse(input$yMetric == "avgChildbearingAge", "Average Childbearing Age", "Marriage Rate"),
+        fill = "Empowerment Index",
+        title = "Selected Metric vs. Women's Empowerment Over Time"
+        ) +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    ggplotly(plot)
+  })
+}
+
+
+# run shiny app
+#shinyApp(ui = ui, server = server)
+
+```
+
+<video width="640" height="360" controls>
+  <source src="images/vis_3.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
+
+
+# Visualization 4
+
+```{r}
+
+# Focused variables
+data_vars <- df %>% 
+  select(
+    Year,
+    avgBirthWomen,
+    democracyIndex,
+    gpdCapita,
+    womenEmpowermentIndex,
+    population,
+    marriageRate,
+    popNoEduc,
+    popBasicEduc
+    ) %>%
+  arrange(Year)
+
+```
+
+## Plotting Functions
+
+```{r}
+# plotting functions
+make_plt1 <- function(filtered_data, selected_var) {
+  ggplot(filtered_data, aes(x = Year)) +
+    geom_line(aes(y = avgBirthWomen), color = "blue") +
+    geom_line(aes(y = filtered_data[[selected_var]] * 10), color = "red") +
+    scale_y_continuous(
+      name = "Births per Woman",
+      sec.axis = sec_axis(~ . / 10, name = "Democracy Index")
+    ) +
+    labs(
+      title = paste(
+            "Trends in Births per Woman and",
+            ifelse(selected_var == 
+                   "democracyIndex", 
+                   "Democracy Index",
+                   "Women's Empowerment"),
+        "Over Time"),
+        
+      x = ""
+      ) +
+    theme_bw() +
+    theme(
+      axis.title.y = element_text(color = "blue", margin = margin(r = 15)),
+      axis.title.y.right = element_text(color = "red", margin = margin(l = 15))
+    )
+}
+
+make_plt2 <- function(filtered_data) {
+  ggplot(filtered_data, aes(democracyIndex, womenEmpowermentIndex)) +
+    geom_smooth(se = FALSE) +
+    labs(
+      title = "Association Between Democracy Index and Women's Empowerment Index",
+      x = "Democracy Index (0-100%)",
+      y = "Women's Empowerment Index (0-100%)"
+      ) +
+    theme_bw()
+}
+
+make_plt3 <- function(filtered_data, selected_var) {
+  ggplot(filtered_data, aes_string(x = selected_var, y = "avgBirthWomen")) +
+    geom_smooth(se = FALSE) +
+    labs(title = paste(
+      ifelse(selected_var == "democracyIndex", "Democracy Index", "Women's Empowerment"),
+      "vs. Average Births per Woman"),
+      
+      x = ifelse(selected_var == "democracyIndex", "Democracy Index (0-100%)",
+                 "Women's Empowerment Index (0-100%)"),
+      
+      y = "Average Births per Woman"
+      ) +
+    theme_bw()
+}
+
+```
+
+## Shiny App
+
+```{r}
+# interface design
+ui <- fluidPage(
+  sliderInput("years", "Select Years",
+              min = min(data_vars$Year), 
+              max = max(data_vars$Year),
+              value = c(min(data_vars$Year), max(data_vars$Year)),
+              sep = ""
+  ),
+  selectInput("var", "Pick a Variable",
+              choices = c("Democracy Index" = "democracyIndex",
+                          "Women's Empowerment" = "womenEmpowermentIndex"),
+              multiple = FALSE),
+  
+  fluidRow(
+    column(6, plotOutput("linePlot")),
+    column(6, plotOutput("linePlot3"))
+  ),
+
+  plotOutput("linePlot2")
+)
+
+server <- function(input, output) {
+  
+  selection <- reactive({
+    data_vars %>%
+      filter(Year >= input$years[1], Year <= input$years[2])
+  })
+  
+  output$linePlot <- renderPlot(make_plt1(selection(), input$var))
+  output$linePlot2 <- renderPlot(make_plt2(selection()))
+  output$linePlot3 <- renderPlot(make_plt3(selection(), input$var))
+}
+
+#shinyApp(ui, server)
+```
+
+<video width="640" height="360" controls>
+  <source src="images/vis_4.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
