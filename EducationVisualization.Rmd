@@ -1,0 +1,109 @@
+---
+title: "AB Education Visualization"
+author: "Arianna Barbosa"
+date: "2025-08-06"
+output: html_document
+---
+
+```{r}
+library(shiny)
+library(ggplot2)
+library(dplyr)
+library(plotly)
+library(DT)  # <-- for interactive tables
+
+df <- read.csv("BirthandEducation.csv")
+
+df$Year <- as.numeric(as.character(df$Year))
+
+df_clean <- df %>%
+  rename(
+    Year = Year,
+    EducationLevel = Mother.s.Education,
+    Births = Births
+  ) %>%
+  filter(!is.na(Births))
+
+ui <- fluidPage(
+  titlePanel("Number of Births by Mother's Education Level (U.S.)"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      sliderInput("yearRange", 
+                  "Select Year Range:", 
+                  min = 2007, 
+                  max = 2023,
+                  value = c(2007, 2023),
+                  step = 1,
+                  sep = ""),
+      
+      checkboxGroupInput("eduLevels", 
+                         "Select Education Level(s):",
+                         choices = unique(df_clean$EducationLevel) %>% setdiff(c("trace 0", "Excluded")),
+                         selected = unique(df_clean$EducationLevel) %>% setdiff(c("trace 0", "Excluded")))
+    ),
+    
+    mainPanel(
+      plotlyOutput("birthPlot", width = "100%", height = "600px"),
+      br(),  # space between plot and table
+      DTOutput("summaryTable")
+    )
+  )
+)
+
+server <- function(input, output) {
+  filteredData <- reactive({
+    df_clean %>%
+      filter(
+        Year >= input$yearRange[1],
+        Year <= input$yearRange[2],
+        EducationLevel %in% input$eduLevels
+      )
+  })
+  
+  output$birthPlot <- renderPlotly({
+    p <- ggplot(filteredData(), aes(x = Year, y = Births, color = EducationLevel, group = EducationLevel)) +
+      geom_line(size = 1.2) +
+      geom_point(size = 2) +
+      labs(
+        x = "Year",
+        y = "Number of Births",
+        color = "Education Level",
+        title = "Number of Births by Mother's Education Level",
+        subtitle = "Data from 2007 to 2023",
+        caption = "Source: BirthandEducation.csv"
+      ) +
+      theme_minimal() +
+      theme(
+        legend.position = "bottom",
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 12),
+        plot.title = element_text(size = 18, face = "bold")
+      )
+    
+    ggplotly(p, tooltip = c("x", "y", "color"))
+  })
+  
+  output$summaryTable <- renderDT({
+    filteredData() %>%
+      group_by(EducationLevel) %>%
+      summarise(TotalBirths = sum(Births, na.rm = TRUE)) %>%
+      arrange(desc(TotalBirths)) %>%
+      datatable(
+        rownames = FALSE,
+        options = list(
+          pageLength = 10,
+          lengthChange = FALSE,
+          searching = TRUE,
+          ordering = TRUE
+        ),
+        colnames = c("Education Level", "Total Births")
+      )
+  })
+}
+
+shinyApp(ui, server)
+```
+
