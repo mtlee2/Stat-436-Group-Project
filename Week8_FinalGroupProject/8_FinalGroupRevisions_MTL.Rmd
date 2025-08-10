@@ -1,0 +1,771 @@
+---
+title: "Final Milestone Revisions"
+author: "Mai Tah Lee"
+date: "2025-08-10"
+output: rmdformats::robobook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warnings = FALSE, message = FALSE)
+```
+
+```{r}
+library(shiny)
+library(shinythemes)
+library(tidyverse)  
+library(plotly)
+library(DT)
+library(viridis)
+library(ggrepel)
+library(scales)
+library(patchwork)
+library(tidygraph)
+library(ggraph)
+```
+
+
+# Visualization 1 
+
+```{r}
+df <- read.csv("data/BirthandEducation.csv")
+
+df$Year <- as.numeric(as.character(df$Year))
+
+df_clean <- df %>%
+  rename(
+    Year = Year,
+    EducationLevel = Mother.s.Education,
+    Births = Births
+  ) %>%
+  filter(!is.na(Births))
+
+ui <- fluidPage(
+  titlePanel("Number of Births by Mother's Education Level (U.S.)"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      sliderInput("yearRange", 
+                  "Select Year Range:", 
+                  min = 2007, 
+                  max = 2023,
+                  value = c(2007, 2023),
+                  step = 1,
+                  sep = ""),
+      
+      checkboxGroupInput("eduLevels", 
+                         "Select Education Level(s):",
+                         choices = unique(df_clean$EducationLevel) %>% setdiff(c("trace 0", "Excluded")),
+                         selected = unique(df_clean$EducationLevel) %>% setdiff(c("trace 0", "Excluded")))
+    ),
+    
+    mainPanel(
+      plotlyOutput("birthPlot", width = "150%", height = "600px"),
+      br(),  # space between plot and table
+      DTOutput("summaryTable")
+    )
+  )
+)
+
+server <- function(input, output) {
+  filteredData <- reactive({
+    df_clean %>%
+      filter(
+        Year >= input$yearRange[1],
+        Year <= input$yearRange[2],
+        EducationLevel %in% input$eduLevels
+      )
+  })
+  
+  output$birthPlot <- renderPlotly({
+    p <- ggplot(filteredData(), aes(x = Year, y = Births, color = EducationLevel, group = EducationLevel)) +
+      geom_line(size = 1.2) +
+      geom_point(size = 2) +
+      labs(
+        x = "Year",
+        y = "Number of Births",
+        color = "Education Level",
+        title = "Number of Births by Mother's Education Level",
+        subtitle = "Data from 2007 to 2023",
+        caption = "Source: BirthandEducation.csv"
+      ) +
+      theme_minimal() +
+      theme(
+        legend.position = "bottom",
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 12),
+        plot.title = element_text(size = 18, face = "bold")
+      )
+    
+    ggplotly(p, tooltip = c("x", "y", "color"))
+  })
+  
+  output$summaryTable <- renderDT({
+    filteredData() %>%
+      group_by(EducationLevel) %>%
+      summarise(TotalBirths = sum(Births, na.rm = TRUE)) %>%
+      arrange(desc(TotalBirths)) %>%
+      datatable(
+        rownames = FALSE,
+        options = list(
+          pageLength = 10,
+          lengthChange = FALSE,
+          searching = TRUE,
+          ordering = TRUE
+        ),
+        colnames = c("Education Level", "Total Births")
+      )
+  })
+}
+```
+
+## ShinyApp
+
+```{r warning = FALSE}
+#shinyApp(ui, server)
+```
+
+<video width="640" height="360" controls>
+  <source src="media/vis1.mp4" type="video/mp4">
+</video>
+
+# Visualization 2
+
+```{r, eval=TRUE}
+# read and clean data
+data <- readr::read_csv("data/mergedWorldDataset.csv", show_col_types = FALSE) |>
+  filter(!is.na(avgChildbearingAge),
+         !is.na(womenEmpowermentIndex),
+         !is.na(marriageRate)) |>
+  select(Year, avgChildbearingAge, womenEmpowermentIndex, marriageRate)
+
+
+# create layout with slider for year, and choices for y-axis metrics
+ui <- fluidPage(
+  titlePanel("Women's Empowerment Data Over Time (U.S.)"),
+  
+  tags$div(
+    style = "margin-bottom: 20px; font-size: 1.5rem; line-height: 1.4;",
+    tags$br(),
+    tags$p(
+      "This dashboard explores trends in key social indicators for women in the United States, 
+      including average childbearing age and marriage rate, alongside the Women's Empowerment Index. 
+      It aims to explore the question: How have changes in women’s empowerment in the U.S. from 1993 
+      to 2020 affected the way that women are assuming traditional family roles?"
+    ),
+    tags$br(),
+    tags$p(
+      tags$b("Women's Empowerment Index:"), 
+      " A composite index ranging from 0 to 1, where higher values indicate greater empowerment 
+      through factors such as education, political participation, and economic inclusion."
+    )
+  ),
+  tags$br(),
+  
+  sidebarLayout(
+    sidebarPanel(
+      sliderInput(
+        "yearRange", "Select Year Range",
+        min(data$Year), max(data$Year),
+        value = c(min(data$Year), max(data$Year)),
+        step = 1, sep = ""
+      ),
+      selectInput(
+        "yMetric", "Select Y-Axis Metric:",
+        choices = c(
+          "Average Childbearing Age" = "avgChildbearingAge",
+          "Marriage Rate" = "marriageRate"
+        ),
+        selected = "avgChildbearingAge"
+      )
+    ),
+    mainPanel(
+      plotlyOutput("barLinePlot", height = "520px")
+    )
+  )
+)
+
+# server that displays graph
+server <- function(input, output) {
+
+  output$barLinePlot <- renderPlotly({
+    filtered_data <- data |>
+      filter(Year >= input$yearRange[1], Year <= input$yearRange[2]) |>
+      mutate(
+        selectedMetric = .data[[input$yMetric]],
+        emp = womenEmpowermentIndex,
+        var_label = ifelse(
+          input$yMetric == "avgChildbearingAge",
+          "Average Childbearing Age (years)",
+          "Marriage Rate (per 1,000)"
+        ),
+        hover_text = paste0(
+          "Year: ", Year,
+          "<br>", var_label, ": ", round(selectedMetric, 2),
+          "<br>Women's Empowerment Index: ", round(emp, 2)
+        )
+      )
+
+    p <- ggplot(filtered_data, aes(x = Year)) +
+      geom_col(aes(y = selectedMetric, fill = emp, text = hover_text), width = 0.5) +
+      scale_fill_viridis_c(
+        option = "C", end = 0.9, direction = 1,
+        name = "Empowerment Index"
+      ) +
+      scale_x_continuous(breaks = seq(min(filtered_data$Year), max(filtered_data$Year), 5)) +
+      labs(
+        x = "Year",
+        y = ifelse(
+          input$yMetric == "avgChildbearingAge",
+          "Average Childbearing Age (years)",
+          "Marriage Rate (per 1,000)"
+        ),
+        title = "Selected Metric vs. Women's Empowerment Over Time"
+      ) +
+      theme_minimal(base_size = 12) +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(face = "bold")
+      )
+
+    ggplotly(p, tooltip = "text") |>
+      layout(hoverlabel = list(align = "left"))
+  })
+}
+```
+
+## ShinyApp
+
+```{r warning = FALSE}
+# run shiny app
+#shinyApp(ui = ui, server = server)
+```
+
+<video width="640" height="360" controls>
+  <source src="media/vis2.mp4" type="video/mp4">
+</video>
+
+# Visualization 3
+
+```{r}
+data = read_csv("data/mergedWorldDataset.csv")
+
+mergedWorld = data[18:87,] %>%
+  mutate(Year = as.integer(Year))
+
+# Compute 5-year ticks STYLE IMPROVEMENT
+year_range <- range(mergedWorld$Year, na.rm = TRUE)
+year_min <- floor(year_range[1] / 5) * 5
+year_max <- ceiling(year_range[2] / 5) * 5
+year_breaks <- seq(year_min, year_max, by = 5)
+
+ui <- fluidPage(
+  titlePanel("GDP vs Birthrates Comparison"),
+  fluidRow(
+    column(6, plotOutput("plot1", brush = brushOpts(id = "sharedBrush", resetOnNew = FALSE))),
+    column(6, plotOutput("plot2", brush = brushOpts(id = "sharedBrush", resetOnNew = FALSE)))
+  )
+)
+
+server <- function(input, output, session) {
+  selectedYears <- reactiveVal(numeric(0))
+
+  observeEvent(input$sharedBrush, {
+    brushed <- brushedPoints(mergedWorld, input$sharedBrush, xvar = "Year", yvar = NULL)
+    selectedYears(brushed$Year)
+  })
+
+  # A nicer base theme to reuse
+  nice_theme <- theme_minimal(base_size = 13) +
+    theme(
+      plot.title.position = "plot",
+      plot.title = element_text(face = "bold", margin = margin(b = 8)),
+      axis.title = element_text(face = "bold"),
+      panel.grid.minor = element_line(linewidth = 0.25),
+      panel.grid.major = element_line(linewidth = 0.4),
+      axis.text = element_text(margin = margin(t = 2, r = 2))
+    )
+
+  output$plot1 <- renderPlot({
+    highlightYears <- selectedYears()
+    mergedWorld %>%
+      mutate(highlight = Year %in% highlightYears) %>%
+      ggplot(aes(x = Year, y = avgBirthWomen)) +
+      geom_point(aes(alpha = highlight, size = highlight)) +
+      scale_alpha_manual(values = c("TRUE" = 1, "FALSE" = 0.5), guide = "none") +
+      scale_size_manual(values = c("TRUE" = 3, "FALSE" = 1), guide = "none") +
+      # Denser axes
+      scale_x_continuous(breaks = year_breaks, expand = expansion(mult = c(0.01, 0.01))) +
+      scale_y_continuous(breaks = pretty_breaks(n = 10), labels = label_number(accuracy = 0.1)) +
+      labs(title = "Birth Rates Over Time", y = "Average births per woman", x = "Year") +
+      nice_theme
+  })
+
+  output$plot2 <- renderPlot({
+    highlightYears <- selectedYears()
+    mergedWorld %>%
+      mutate(highlight = Year %in% highlightYears) %>%
+      ggplot(aes(x = Year, y = gpdCapita)) +
+      geom_point(aes(alpha = highlight, size = highlight)) +
+      scale_alpha_manual(values = c("TRUE" = 1, "FALSE" = 0.3), guide = "none") +
+      scale_size_manual(values = c("TRUE" = 3, "FALSE" = 1), guide = "none") +
+      # Denser axes
+      scale_x_continuous(breaks = year_breaks, expand = expansion(mult = c(0.01, 0.01))) +
+      scale_y_continuous(breaks = pretty_breaks(n = 10), labels = label_comma()) +
+      labs(title = "GDP Per Capita Over Time", y = "GDP per Capita", x = "Year") +
+      nice_theme
+  })
+}
+
+```
+
+## ShinyApp
+
+```{r}
+#shinyApp(ui, server)
+```
+
+<video width="640" height="360" controls>
+  <source src="media/vis3.mp4" type="video/mp4">
+</video>
+
+# Visualization 4
+
+```{r}
+data_vars <- read.csv("data/mergedWorldDataset.csv") %>% 
+  select(
+    Year,
+    avgBirthWomen,
+    democracyIndex,
+    gpdCapita,
+    womenEmpowermentIndex,
+    population,
+    marriageRate,
+    popNoEduc,
+    popBasicEduc, 
+    avgChildbearingAge
+    ) 
+```
+
+```{r}
+# Labels for nice facet titles
+nice_labels <- c(
+  avgBirthWomen = "Births per Woman",
+  avgChildbearingAge = "Average Childbearing Age",
+  marriageRate = "Marriage Rate",
+  democracyIndex = "Democracy Index"
+)
+
+# Master events table
+events_master <- tibble(
+  key   = c("pill", "epa", "roe", "dobbs"),
+  label = c("Pill approval", "Equal Pay Act", "Roe v. Wade", "Dobbs"),
+  year  = c(1960, 1963, 1973, 2022)
+)
+```
+
+## Plotting Functions
+
+* Plot 1
+```{r}
+# plot of multiple graphs w/variables (by faceting)
+make_small_multiples <- function(df, demo_var, events = NULL) {
+  keep_cols <- c("Year", "avgBirthWomen", "democracyIndex", demo_var)
+  
+  plot_df <- df %>%
+    select(all_of(keep_cols)) %>%
+    pivot_longer(-Year, names_to = "series", values_to = "value") %>%
+    mutate(series = factor(series, 
+                           levels = keep_cols[-1],
+                           labels = unname(nice_labels[keep_cols[-1]]))) %>%
+    drop_na()
+  
+  p <- ggplot(plot_df, aes(Year, value)) +
+    geom_line() +
+    facet_wrap(~ series, ncol = 1, scales = "free_y") +
+    labs(
+      title = "Trends in Birth Rates, Demographics, and Democracy Over Time",
+      x = "Year",
+      y = ""
+      ) +
+    theme_bw() + 
+    theme(
+      strip.text = element_text(size = 14, face = "bold"),
+      plot.title   = element_text(size = 20, face = "bold"),
+      plot.subtitle= element_text(size = 13),
+      axis.title   = element_text(size = 12),
+      axis.text    = element_text(size = 11),
+      legend.text  = element_text(size = 10),
+    )
+  
+if (!is.null(events) && nrow(events) > 0) {
+
+  facet_ranges <- plot_df %>%
+    group_by(series) %>%
+    summarise(
+      ymin = min(value, na.rm = TRUE),
+      ymax = max(value, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      y0   = ymin + 0.10 * (ymax - ymin),
+      step = 0.08 * (ymax - ymin)
+    )
+
+  # bottom facet label (as character)
+  bottom_lab_chr <- tail(levels(plot_df$series), 1)
+
+  # dashed lines in ALL facets
+  ev_lines <- crossing(
+    events %>% select(year, label),
+    facet_ranges %>% select(series)
+  ) %>%
+    mutate(
+      # ensure series factor levels match the plotting data
+      series = factor(series, levels = levels(plot_df$series))
+    )
+
+  # labels ONLY in the bottom facet
+  k  <- 3
+  br <- facet_ranges %>% filter(as.character(series) == bottom_lab_chr)
+
+  ev_labels <- events %>%
+    mutate(
+      ord = row_number(),
+      lvl = (ord - 1) %% k,
+      y   = br$y0 + lvl * br$step,
+      x   = year - 1.1,
+      # force series to be the same factor/levels as plot_df$series
+      series = factor(bottom_lab_chr, levels = levels(plot_df$series))
+    )
+
+  event_levels  <- events_master$label
+  event_palette <- c(
+    "Pill approval" = "blue",
+    "Equal Pay Act" = "purple",
+    "Roe v. Wade"   = "darkgreen",
+    "Dobbs"         = "red"
+  )
+
+  # add historical event lines onto the graph
+  p <- p +
+    geom_vline(
+      data = ev_lines,
+      aes(xintercept = year, color = label),
+      linetype = 3, show.legend = FALSE
+    ) +
+    geom_text(
+      data = ev_labels,
+      aes(x = x, y = y, label = paste0(label, " (", year, ")"), color = label),
+      hjust = 1,
+      vjust = 1,
+      size = 4,
+      show.legend = FALSE
+    ) +
+    scale_color_manual(values = event_palette,
+                       limits = event_levels,
+                       breaks = event_levels,
+                       drop   = FALSE) +
+    coord_cartesian(clip = "off", expand = FALSE) + 
+    labs(
+      title = "Trends in Birth Rates, Demographics, and Democracy Over Time",
+      x = "Year",
+      y = ""
+      ) +
+    theme_bw() + 
+    theme(
+      strip.text = element_text(size = 14, face = "bold"),
+      plot.title   = element_text(size = 20, face = "bold"),
+      plot.subtitle= element_text(size = 13),
+      axis.title   = element_text(size = 12),
+      axis.text    = element_text(size = 11),
+      legend.text  = element_text(size = 10),
+      )
+  }
+  p
+}
+
+```
+
+* Plot 2
+```{r}
+# single graph of trends with variables 
+make_index_plot <- function(df, demo_var, base_year = 1980, events = NULL) {
+  keep_cols <- c("Year", "avgBirthWomen", "democracyIndex", demo_var)
+
+  # long frame
+  long <- df %>%
+    select(all_of(keep_cols)) %>%
+    pivot_longer(-Year, names_to = "series_raw", values_to = "value") %>%
+    drop_na(Year)
+
+  # choose a safe baseline per series:
+  # - use the requested base_year if it exists and isn't NA
+  # - otherwise use the first available non-NA year within the filtered data
+  base_tbl <- long %>%
+    group_by(series_raw) %>%
+    summarize(
+      base_year_eff = if (base_year %in% Year && any(!is.na(value[Year == base_year])))
+                        base_year
+                      else
+                        min(Year[!is.na(value)], na.rm = TRUE),
+      .groups = "drop"
+    )
+
+  long2 <- long %>%
+    left_join(base_tbl, by = "series_raw") %>%
+    group_by(series_raw) %>%
+    mutate(
+      base_val = value[match(first(base_year_eff), Year)],
+      # if still NA (very edge case), fall back to first non-NA value
+      base_val = ifelse(is.na(base_val), first(value[!is.na(value)]), base_val),
+      index = 100 * value / base_val
+    ) %>%
+    ungroup() %>%
+    drop_na(index)
+
+  # labels
+  labels_vec <- nice_labels[names(nice_labels) %in% setdiff(keep_cols, "Year")]
+  long2 <- long2 %>%
+    mutate(series = factor(series_raw,
+                           levels = names(labels_vec),
+                           labels = unname(labels_vec)))
+
+  # plot
+  p <- ggplot(long2, aes(Year, index, color = series)) +
+    geom_line() +
+    geom_hline(yintercept = 100, linetype = 2, col = "red") +
+    geom_label(
+    aes(
+      x = min(long2$Year, na.rm = TRUE) + 5,  # place near left edge
+      y = 100,
+      label = "Base Line = 100"
+    ),
+      inherit.aes = FALSE,
+      vjust = -0.5,
+      hjust = 0,
+      size = 4,
+      color = "black",        # text color
+      fill = "grey90",         # background color
+      label.size = 0.3,           # border thickness
+      label.r = unit(0.15, "lines") # corner radius
+     ) + 
+    labs( 
+        title = paste0("Relative Change in Democracy Index and Demographic Indicators Since ", base_year), 
+        x = "Year",
+        y = "Index"
+        ) + 
+    theme_bw() + 
+    theme(
+        legend.title = element_blank(),
+        plot.title   = element_text(size = 20, face = "bold"),
+        plot.subtitle= element_text(size = 13),
+        axis.title   = element_text(size = 12),
+        axis.text    = element_text(size = 11),
+        legend.text  = element_text(size = 10),
+        strip.text   = element_text(size = 13, face = "bold")
+      )
+
+  # --- events: draw ONCE (not per series), stepped and to the left ---
+  if (!is.null(events) && nrow(events) > 0) {
+    r   <- range(long2$index, na.rm = TRUE)
+    y0  <- r[1] + 0.10 * diff(r)   # baseline height
+    step <- 0.08 * diff(r)         # step between labels
+    k    <- 3                      # number of levels to cycle through
+
+    ev <- events %>%
+      mutate(
+        ord = row_number(),
+        lvl = (ord - 1) %% k,
+        y   = y0 + lvl * step,
+        x   = year - 1.1              # put text to the LEFT of the line
+      )
+    
+    # Add historical event lines onto the graph
+    p <- p +
+      geom_vline(
+        data = ev, aes(xintercept = year),
+        linetype = 3, inherit.aes = FALSE, show.legend = FALSE
+      ) +
+      # draw text only at the bottom facet 
+      geom_text(
+        data = ev, aes(x = x, y = y, label = paste0(label, " (", year, ")")),
+        hjust = 1, 
+        vjust = 1, 
+        size = 4,
+        fontface = "bold",
+        inherit.aes = FALSE, 
+        show.legend = FALSE
+      ) +
+      coord_cartesian(clip = "off", expand = FALSE) +
+      labs( 
+        title = paste0("Relative Change in Democracy Index and Demographic Indicators Since ", base_year), 
+        x = "Year",
+        y = "Index"
+        ) + 
+      theme_bw() + 
+      theme(
+        legend.title = element_blank(),
+        plot.title   = element_text(size = 20, face = "bold"),
+        plot.subtitle= element_text(size = 13),
+        axis.title   = element_text(size = 12),
+        axis.text    = element_text(size = 11),
+        legend.text  = element_text(size = 10),
+        strip.text   = element_text(size = 13, face = "bold")
+      )
+  }
+  p
+}
+
+```
+
+## UI & Server 
+
+```{r}
+# UI
+ui <- fluidPage(
+  titlePanel("Democracy Index in Context: Birth, Marriage, and Age Trends"),
+  theme = shinytheme("flatly"),
+
+  tags$head(
+  tags$style(HTML("
+    .guide-box{
+      border:1px solid #d9d9d9; border-radius:8px; background:#fff; margin-top:8px;
+      box-shadow:0 1px 2px rgba(0,0,0,.04);
+    }
+    .guide-box summary{
+      cursor:pointer; padding:10px 12px; font-weight:600; font-size:16px; list-style:none;
+    }
+    .guide-box summary::-webkit-details-marker{ display:none; }
+    .guide-box summary::after{ content:'▸'; float:right; transition:transform .15s ease; color:#6b7280; }
+    .guide-box[open] summary::after{ content:'▾'; }
+    .guide-box .body{ padding:8px 12px 12px; }
+    "))
+  ),
+  
+  fluidRow(
+    column(
+      width = 3,
+      wellPanel(
+        sliderInput(
+          "years", "Select Years",
+          min = min(data_vars$Year, na.rm = TRUE),
+          max = max(data_vars$Year, na.rm = TRUE),
+          value = c(min(data_vars$Year, na.rm = TRUE),
+                    max(data_vars$Year, na.rm = TRUE)),
+          sep = "",
+          ticks = FALSE
+        ),
+
+        selectInput(
+          "demo_var", "Pick a Demographic Variable",
+          choices = c("Average Childbearing Age" = "avgChildbearingAge",
+                      "Marriage Rate"            = "marriageRate"),
+          multiple = TRUE
+        ),
+
+        radioButtons(
+          "view_mode", "Compare as",
+          choices = c("Separate Panels" = "multiples",
+                      "Relative Change" = "indexed"),
+          selected = "multiples"
+        ),
+        
+        conditionalPanel(
+          condition = "input.view_mode == 'multiples'",
+          tags$details(class = "guide-box",
+            tags$summary("Y-axis guide (units)"),
+            div(class = "body", HTML("
+              <ul style='padding-left:16px;margin:0'>
+                <li><b>Births per Woman</b>: children per woman.</li>
+                <li><b>Democracy Index</b>: 0–1 index (higher = more democratic).</li>
+                <li><b>Average Childbearing Age</b>: years.</li>
+                <li><b>Marriage Rate</b>: marriages per 1,000 people per year.</li>
+              </ul>
+            "))
+          )),
+        
+        
+        conditionalPanel(
+          condition = "input.view_mode == 'indexed'",
+          numericInput(
+            "base_year", "Base year for Relative Change since",
+            value = 1980, min = 1933, max = 2024, step = 1
+          ),
+          helpText("In the Relative Change view, all variables are rescaled 
+                   so their value in the selected base year equals 100. 
+                   This makes it easy to compare percentage changes over 
+                   time, even when the variables have different units or scales."),
+          tags$hr(),
+          tags$h4("Interpretation"),
+          helpText("Values above the 100 line indicate an increase relative to 
+                   the base year, while values below indicate a decrease. 
+                   For example, an index of 120 means the value is 20% higher 
+                   than in the base year, whereas an index of 80 means it is 20% lower")
+          
+        ),
+
+        tags$hr(),
+        checkboxGroupInput(
+          "events_to_show", "Select Historical events",
+          choices  = setNames(events_master$key, events_master$label),
+          selected = NULL
+        ),
+        actionButton("select_all_events", "Select All"),
+      )
+    ),
+
+    column(
+      width = 9,
+      plotOutput("viz_main", height = "750px")
+    )
+  )
+)
+
+# Server 
+server <- function(input, output, session) {
+  
+  selection <- reactive({
+    data_vars %>%
+      filter(Year >= input$years[1], Year <= input$years[2])
+  })
+  
+  chosen_events <- reactive({
+  if (is.null(input$events_to_show) || length(input$events_to_show) == 0) {
+    return(tibble(year = numeric(0), label = character(0)))
+  }
+  events_master %>%
+    filter(key %in% input$events_to_show) %>%
+    select(year, label)
+  })
+  
+  observeEvent(input$select_all_events, {
+  updateCheckboxGroupInput(
+    session,
+    "events_to_show",
+    selected = events_master$key
+    )
+  })
+  
+  output$viz_main <- renderPlot({
+    if (input$view_mode == "multiples") {
+      make_small_multiples(selection(), input$demo_var, events = chosen_events())
+    } else {
+      make_index_plot(selection(), input$demo_var,
+                      base_year = input$base_year,
+                      events = chosen_events())
+    }
+  })
+}
+```
+
+## ShinyApp
+
+```{r}
+#shinyApp(ui, server)
+```
+
+<video width="640" height="360" controls>
+  <source src="media/vis4.mp4" type="video/mp4">
+</video>
